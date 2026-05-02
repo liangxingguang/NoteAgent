@@ -1,11 +1,12 @@
 [project]
 name = "NoteAgents"
 version = "0.1.0"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
     "python-telegram-bot>=22.7",
     "python-dotenv>=1.0.0",
     "requests>=2.31.0",
+    "lark-oapi>=1.5.5",
     "aiohttp>=3.9.0",
     "pypdf2>=3.0.0",
     "python-docx>=1.1.0",
@@ -13,7 +14,7 @@ dependencies = [
     "lxml>=4.9.0",
     "openai>=1.0.0",
     "anthropic>=0.97.0",
-    "google-genai>=0.10.0",
+    "google-genai>=1.0.0",
     "pydantic>=2.13.3",
     "tenacity>=9.1.4",
     "trafilatura>=2.0.0",
@@ -28,7 +29,7 @@ test = [
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["NoteAgents", "agent*", "config*", "storage*", "tools*", "utils*"]
+include = ["NoteAgents", "agent*", "config*", "storage*", "tools*", "utils*", "platforms*"]
 exclude = ["test*", "doc*"]
 
 [tool.pytest.ini_options]

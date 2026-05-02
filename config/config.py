@@ -5,15 +5,42 @@ from dataclasses import dataclass, field
 from dotenv import load_dotenv
 
 
+@dataclass
+class FeishuConfig:
+    """飞书平台配置"""
+    enabled: bool = False
+    app_id: str = ""
+    app_secret: str = ""
+    verification_token: str = ""
+    encrypt_key: str = ""
+    bot_name: str = "NoteAgents"
+    allowed_user_ids: list[str] = field(default_factory=list)
+    poll_interval: float = 1.0
+    use_webhook: bool = False
+    webhook_host: str = "0.0.0.0"
+    webhook_port: int = 8000
+
+
+@dataclass
+class TelegramConfig:
+    """Telegram 平台配置"""
+    enabled: bool = False
+    bot_token: str = ""
+    allowed_user_ids: list[int] = field(default_factory=list)
+    use_proxy: bool = False
+    proxy_url: str = ""
+    poll_interval: float = 1.0
+    poll_timeout: int = 20
+    use_webhook: bool = False
+    webhook_url: str = ""
+    webhook_host: str = "0.0.0.0"
+    webhook_port: int = 8443
+    webhook_secret: str = ""
+
 
 @dataclass
 class Config:
     """配置类"""
-
-    tg_bot_token: str = ""
-    allowed_user_ids: list[int] = field(default_factory=list)
-    use_proxy: bool = False
-    proxy_url: str = ""
 
     ai_api_key: str = ""
     ai_model: str = "qwen-turbo"
@@ -36,6 +63,12 @@ class Config:
     max_file_size: int = 50 * 1024 * 1024
     max_text_length: int = 5000
 
+    # 飞书配置
+    feishu: FeishuConfig = field(default_factory=FeishuConfig)
+    
+    # Telegram 配置（新）
+    telegram: TelegramConfig = field(default_factory=TelegramConfig)
+
     @classmethod
     def from_env(cls, env_file: Optional[str] = None) -> "Config":
         """从环境变量加载配置"""
@@ -57,6 +90,7 @@ class Config:
         if not loaded:
             load_dotenv(override=True)
 
+        # 解析 Telegram 允许的用户 ID
         allowed_user_ids_str = os.getenv("ALLOWED_USER_IDS", "")
         allowed_user_ids = []
         if allowed_user_ids_str:
@@ -64,14 +98,55 @@ class Config:
                 int(uid.strip()) for uid in allowed_user_ids_str.split(",") if uid.strip()
             ]
 
+        # GitHub 配置
         github_enabled_str = os.getenv("GITHUB_ENABLED", "false").lower()
         github_enabled = github_enabled_str in ("true", "1", "yes")
 
-        return cls(
-            tg_bot_token=os.getenv("TG_BOT_TOKEN", ""),
+        # 飞书配置
+        feishu_enabled_str = os.getenv("FEISHU_ENABLED", "false").lower()
+        feishu_enabled = feishu_enabled_str in ("true", "1", "yes")
+
+        feishu_allowed_user_ids_str = os.getenv("FEISHU_ALLOWED_USER_IDS", "")
+        feishu_allowed_user_ids = []
+        if feishu_allowed_user_ids_str:
+            feishu_allowed_user_ids = [
+                uid.strip() for uid in feishu_allowed_user_ids_str.split(",") if uid.strip()
+            ]
+
+        feishu_config = FeishuConfig(
+            enabled=feishu_enabled,
+            app_id=os.getenv("FEISHU_APP_ID", ""),
+            app_secret=os.getenv("FEISHU_APP_SECRET", ""),
+            verification_token=os.getenv("FEISHU_VERIFICATION_TOKEN", ""),
+            encrypt_key=os.getenv("FEISHU_ENCRYPT_KEY", ""),
+            bot_name=os.getenv("FEISHU_BOT_NAME", "NoteAgents"),
+            allowed_user_ids=feishu_allowed_user_ids,
+            poll_interval=float(os.getenv("FEISHU_POLL_INTERVAL", "1.0")),
+            use_webhook=os.getenv("FEISHU_USE_WEBHOOK", "false").lower() in ("true", "1", "yes"),
+            webhook_host=os.getenv("FEISHU_WEBHOOK_HOST", "0.0.0.0"),
+            webhook_port=int(os.getenv("FEISHU_WEBHOOK_PORT", "8000")),
+        )
+
+        # Telegram 配置
+        tg_enabled_str = os.getenv("TG_USE_WEBHOOK", "false").lower()
+        tg_use_webhook = tg_enabled_str in ("true", "1", "yes")
+        tg_bot_token = os.getenv("TG_BOT_TOKEN", "")
+        telegram_config = TelegramConfig(
+            enabled=bool(tg_bot_token),
+            bot_token=tg_bot_token,
             allowed_user_ids=allowed_user_ids,
-            use_proxy=os.getenv("USE_PROXY", "false").lower() == "true",
-            proxy_url=os.getenv("PROXY_URL", ""),
+            use_proxy=os.getenv("TG_USE_PROXY", "false").lower() == "true",
+            proxy_url=os.getenv("TG_PROXY_URL", ""),
+            poll_interval=float(os.getenv("TG_POLL_INTERVAL", "1.0")),
+            poll_timeout=int(os.getenv("TG_POLL_TIMEOUT", "20")),
+            use_webhook=tg_use_webhook,
+            webhook_url=os.getenv("TG_WEBHOOK_URL", ""),
+            webhook_host=os.getenv("TG_WEBHOOK_HOST", "0.0.0.0"),
+            webhook_port=int(os.getenv("TG_WEBHOOK_PORT", "8443")),
+            webhook_secret=os.getenv("TG_WEBHOOK_SECRET", ""),
+        )
+
+        return cls(
             ai_api_key=os.getenv("AI_API_KEY", ""),
             ai_model=os.getenv("AI_MODEL", "qwen-turbo"),
             ai_base_url=os.getenv("AI_BASE_URL"),
@@ -86,12 +161,18 @@ class Config:
             log_level=os.getenv("LOG_LEVEL", "INFO"),
             temp_dir=os.getenv("TEMP_DIR", "storage/temp_files"),
             log_dir=os.getenv("LOG_DIR", "storage/logs"),
+            feishu=feishu_config,
+            telegram=telegram_config,
         )
 
     def validate(self) -> tuple[bool, str]:
         """验证配置是否完整"""
-        if not self.tg_bot_token:
-            return False, "TG_BOT_TOKEN 未配置"
+        # 验证必配项 - 至少需要 Telegram 或飞书其中之一启用
+        has_telegram = self.telegram.enabled and bool(self.telegram.bot_token)
+        has_feishu = self.feishu.enabled and bool(self.feishu.app_id) and bool(self.feishu.app_secret)
+
+        if not has_telegram and not has_feishu:
+            return False, "需要至少配置 TG_BOT_TOKEN 或启用飞书并配置 FEISHU_APP_ID/FEISHU_APP_SECRET"
 
         if not self.ai_api_key:
             return False, "AI_API_KEY 未配置"
@@ -106,6 +187,13 @@ class Config:
                 return False, "GITHUB_ENABLED 为 true 但 GITHUB_OWNER 未配置"
             if not self.github_repo:
                 return False, "GITHUB_ENABLED 为 true 但 GITHUB_REPO 未配置"
+
+        # 验证飞书配置（如果启用）
+        if self.feishu.enabled:
+            if not self.feishu.app_id:
+                return False, "FEISHU_ENABLED 为 true 但 FEISHU_APP_ID 未配置"
+            if not self.feishu.app_secret:
+                return False, "FEISHU_ENABLED 为 true 但 FEISHU_APP_SECRET 未配置"
 
         return True, ""
 
