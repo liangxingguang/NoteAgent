@@ -1,6 +1,6 @@
 """工具层 - 业务功能工具
 
-包含Telegram消息工具、文件处理工具、AI总结工具、Obsidian入库工具等。
+包含Telegram消息工具、文件处理工具、AI总结工具、Obsidian入库工具、LLM Wiki工具等。
 """
 
 # 尝试使用绝对导入，如果失败则使用相对导入
@@ -47,7 +47,10 @@ from .temp_clean_tool import (
 from .model_adapter import (
         ModelProvider
     )
-
+from .wiki_tool import (
+        WikiTool,
+        get_wiki_tool
+    )
 
 
 __all__ = [
@@ -82,4 +85,6 @@ __all__ = [
     "cleanup_expired_temp_files",
     "cleanup_all_temp_files",
     "ModelProvider",
+    "WikiTool",
+    "get_wiki_tool",
 ]

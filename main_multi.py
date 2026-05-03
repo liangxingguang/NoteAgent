@@ -9,6 +9,39 @@ import os
 import signal
 import sys
 
+# 设置 sniffio 以支持 python-telegram-bot（必须放在最前面）
+try:
+    import sniffio
+    from sniffio import AsyncLibraryNotFoundError
+
+    # 保存原始的 sniffio 函数
+    _original_current_async_library = sniffio.current_async_library
+
+    def _patched_current_async_library():
+        try:
+            return _original_current_async_library()
+        except AsyncLibraryNotFoundError:
+            # 如果无法检测到，默认返回 asyncio
+            return "asyncio"
+
+    sniffio.current_async_library = _patched_current_async_library
+except ImportError:
+    pass
+
+# 应用 nest_asyncio 解决事件循环冲突问题（只在需要时启用）
+# 注意：nest_asyncio 可能与 python-telegram-bot 的 anyio 冲突
+try:
+    import os
+    # 检查是否启用了飞书 webhook，这是最需要 nest_asyncio 的场景
+    feishu_webhook_enabled = os.getenv("FEISHU_USE_WEBHOOK", "false").lower() == "true"
+    tg_webhook_enabled = os.getenv("TG_USE_WEBHOOK", "false").lower() == "true"
+
+    if feishu_webhook_enabled or tg_webhook_enabled:
+        import nest_asyncio
+        nest_asyncio.apply()
+except ImportError:
+    pass
+
 project_root = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, project_root)
 
@@ -38,6 +71,7 @@ from platforms import (
     FeishuAdapter,
 )
 from tools.feishu_tool import build_platform_start_message
+from tools import get_wiki_tool
 
 
 logger = get_logger("MainMulti")
@@ -103,6 +137,7 @@ def init_modules():
 class NoteAgentsApp:
     """
     NoteAgents 主应用 - 多平台版本
+    集成 LLM Wiki 模块！
     """
 
     def __init__(self):
@@ -111,10 +146,30 @@ class NoteAgentsApp:
         self.coordinator = None
         self.running = True
         self._telegram_task = None
+        self._wiki_watcher = None  # LLM Wiki 文件监控
 
     async def initialize(self):
         """初始化应用"""
         init_modules()
+
+        # 初始化 LLM Wiki 模块
+        logger.info("初始化 LLM Wiki 模块...")
+        try:
+            if self.config.wiki.enabled and self.config.wiki.file_monitor_enabled:
+                # 配置为 true 时才启动文件监控
+                wiki = get_wiki_tool()
+                # 使用配置的间隔
+                poll_interval = self.config.wiki.file_monitor_interval
+                watcher = wiki.start_watcher(poll_interval=poll_interval)
+                self._wiki_watcher = watcher
+                logger.info(f"LLM Wiki 文件监控已启动（间隔: {poll_interval}s，保存即整理！）")
+            else:
+                if not self.config.wiki.enabled:
+                    logger.info("LLM Wiki 功能未启用（WIKI_ENABLED=false）")
+                else:
+                    logger.info("LLM Wiki 文件监控未启用（WIKI_FILE_MONITOR_ENABLED=false）")
+        except Exception as e:
+            logger.warning(f"LLM Wiki 初始化异常（不影响主流程）: {e}")
 
         # 设置平台管理器
         self.platform_manager = setup_platform_manager(self.config)
@@ -150,7 +205,7 @@ class NoteAgentsApp:
         await self.platform_manager.start_all()
 
         # 如果启用了 Telegram，使用平台管理器
-        if config.telegram.enabled and config.telegram.bot_token:
+        if self.config.telegram.enabled and self.config.telegram.bot_token:
             logger.info("Telegram 支持已通过平台管理器配置")
 
         # 主循环

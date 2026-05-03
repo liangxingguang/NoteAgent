@@ -10,6 +10,7 @@ from config.config import get_config
 from storage.log_manager import get_logger
 from utils.file_utils import ensure_dir_exists, check_dir_writable, get_text_hash
 from utils.text_utils import generate_timestamp
+from wiki.path_utils import WikiPathManager
 
 
 logger = get_logger("ObsidianTool")
@@ -121,14 +122,16 @@ def write_note_to_file(
     """
     config = get_config()
 
-    # 验证目录
     if not config.obsidian_vault_path:
         return False, NoteInfo(filename="", filepath="", error="未配置Obsidian知识库路径")
 
     vault_dir = config.obsidian_vault_path
+    archive_strategy = config.wiki.archive_strategy if config.wiki else "daily"
+    wiki_path_manager = WikiPathManager(vault_path=vault_dir, archive_strategy=archive_strategy)
+    raw_dir = os.path.join(vault_dir, wiki_path_manager.get_raw_auto_path())
 
     # 确保目录存在
-    if not ensure_dir_exists(vault_dir):
+    if not ensure_dir_exists(raw_dir):
         return False, NoteInfo(filename="", filepath="", error="无法创建Obsidian目录")
 
     # 检查目录可写
@@ -148,7 +151,7 @@ def write_note_to_file(
     if not filename.endswith(".md"):
         filename += ".md"
 
-    filepath = os.path.join(vault_dir, filename)
+    filepath = os.path.join(raw_dir, filename)
 
     # 写入文件
     try:
@@ -164,6 +167,25 @@ def write_note_to_file(
         )
 
         logger.info(f"笔记写入成功: {filepath}")
+
+        # 自动触发 LLM Wiki 结构化处理
+        config = get_config()
+        if config.wiki and config.wiki.enabled:
+            try:
+                from tools import get_wiki_tool
+                logger.info("自动触发 LLM Wiki 结构化处理...")
+                wiki = get_wiki_tool()
+                wiki_result = wiki.workflow.process_file(filepath)
+                if wiki_result:
+                    logger.info(f"LLM Wiki 处理成功: {wiki_result}")
+                    wiki.update_index()
+                    if config.wiki.auto_import_wiki:
+                        wiki.import_knowledge()
+                else:
+                    logger.warning(f"LLM Wiki 处理失败")
+            except Exception as e:
+                logger.error(f"LLM Wiki 处理异常: {e}", exc_info=True)
+
         return True, note_info
 
     except Exception as e:

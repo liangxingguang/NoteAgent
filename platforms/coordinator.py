@@ -1,8 +1,10 @@
 """
 多平台协调器 - 统一处理来自不同平台的消息
+集成 LLM Wiki 模块，实现完整流程自动化！
 """
 
 import asyncio
+import os
 from typing import Optional, Tuple, Dict, Any
 
 from .manager import PlatformManager
@@ -23,6 +25,9 @@ from tools import (
     cleanup_file,
 )
 from tools.web_tool import get_web_tool
+from tools import get_wiki_tool
+from config import get_config
+from wiki.command_handler import WikiCommandHandler
 
 
 logger = get_logger("Coordinator")
@@ -35,6 +40,7 @@ class MessageCoordinator:
 
     def __init__(self, platform_manager: PlatformManager):
         self.platform_manager = platform_manager
+        self.wiki_command_handler = WikiCommandHandler()
 
     async def process_message(self, msg: UnifiedMessage):
         """
@@ -48,6 +54,16 @@ class MessageCoordinator:
             if not adapter:
                 logger.error(f"无法获取平台适配器: {msg.platform.value}")
                 return
+
+            # 0. 检查是否为 Wiki 命令（优先处理！
+            config = get_config()
+            if config.wiki.enabled and msg.content_type == ContentType.TEXT:
+                is_wiki_command, response_msg = self.wiki_command_handler.process_command(msg.text)
+                if is_wiki_command:
+                    logger.info(f"Wiki 命令处理: {msg.text}")
+                    if hasattr(adapter, 'send_message'):
+                        await adapter.send_message(msg.chat_id, response_msg)
+                    return
 
             # 1. 检查是否为命令
             if msg.content_type == ContentType.COMMAND and hasattr(adapter, 'process_command'):
@@ -127,6 +143,10 @@ class MessageCoordinator:
                 "error": note_info.error or "写入 Obsidian 失败"
             }
 
+        # LLM Wiki 自动集成已由 ObsidianTool.write_note_to_file() 内部处理
+        # 此处不需要再次调用 wiki.process_note_from_auto()
+        logger.info("笔记已由 ObsidianTool 自动处理 LLM Wiki 结构化")
+
         return {
             "success": True,
             "filename": note_info.filename,
@@ -158,6 +178,9 @@ class MessageCoordinator:
                 "success": False,
                 "error": note_info.error or "写入 Obsidian 失败"
             }
+
+        # LLM Wiki 自动集成已由 ObsidianTool.write_note_to_file() 内部处理
+        logger.info("笔记已由 ObsidianTool 自动处理 LLM Wiki 结构化")
 
         return {
             "success": True,
@@ -213,6 +236,9 @@ class MessageCoordinator:
                 "error": note_info.error or "写入 Obsidian 失败"
             }
 
+        # LLM Wiki 自动集成已由 ObsidianTool.write_note_to_file() 内部处理
+        logger.info("笔记已由 ObsidianTool 自动处理 LLM Wiki 结构化")
+
         return {
             "success": True,
             "filename": note_info.filename,
@@ -255,10 +281,13 @@ def setup_platform_manager(config) -> PlatformManager:
     # Telegram 配置
     if config.telegram.enabled and config.telegram.bot_token:
         telegram_config = AdapterTelegramConfig(
-            enabled=True,
+            enabled=config.telegram.enabled,
             bot_token=config.telegram.bot_token,
+            allowed_user_ids=list(map(str, config.telegram.allowed_user_ids)),  # 转换为 str 列表
             poll_interval=config.telegram.poll_interval,
             poll_timeout=config.telegram.poll_timeout,
+            use_proxy=config.telegram.use_proxy,
+            proxy_url=config.telegram.proxy_url,
             use_webhook=config.telegram.use_webhook,
             webhook_url=config.telegram.webhook_url,
             webhook_host=config.telegram.webhook_host,

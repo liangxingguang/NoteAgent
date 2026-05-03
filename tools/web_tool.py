@@ -64,7 +64,8 @@ class WebTool:
 
             # 3. 标题
             soup = BeautifulSoup(response.text, "html.parser")
-            title = soup.title.string.strip() if soup.title else "无标题"
+            title_tag = soup.title
+            title = title_tag.string.strip() if title_tag and title_tag.string else "无标题"
 
             # 4. 构建结果
             result = WebPageContent(

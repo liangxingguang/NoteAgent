@@ -45,9 +45,9 @@ class LogManager:
         logger.setLevel(self.log_level)
         logger.handlers.clear()  # 清除已有handler
 
-        # 日志格式
+        # 日志格式（包含文件名和行号）
         log_format = logging.Formatter(
-            "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            "%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] %(message)s",
             datefmt="%Y-%m-%d %H:%M:%S"
         )
 

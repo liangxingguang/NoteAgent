@@ -39,6 +39,33 @@ class TelegramConfig:
 
 
 @dataclass
+class WikiConfig:
+    """LLM Wiki 配置"""
+    enabled: bool = False
+    vault_path: str = ""
+    archive_strategy: str = "daily"
+
+    llm_api_key: str = ""
+    llm_model: str = "qwen-turbo"
+    llm_base_url: Optional[str] = None
+    llm_temperature: float = 0.7
+    llm_max_tokens: int = 2000
+    llm_retry_times: int = 3
+
+    auto_process: bool = True
+    auto_import_wiki: bool = False
+
+    file_monitor_enabled: bool = True
+    file_monitor_interval: int = 5
+
+    health_check_interval: int = 7
+
+    structured_categories: list[str] = field(
+        default_factory=lambda: ["技术类", "想法类", "学习类", "日常类"]
+    )
+
+
+@dataclass
 class Config:
     """配置类"""
 
@@ -68,6 +95,9 @@ class Config:
     
     # Telegram 配置（新）
     telegram: TelegramConfig = field(default_factory=TelegramConfig)
+
+    # Wiki 配置
+    wiki: WikiConfig = field(default_factory=WikiConfig)
 
     @classmethod
     def from_env(cls, env_file: Optional[str] = None) -> "Config":
@@ -128,11 +158,12 @@ class Config:
         )
 
         # Telegram 配置
+        tg_enabled = os.getenv("TG_ENABLED", "true").lower() in ("true", "1", "yes")
         tg_enabled_str = os.getenv("TG_USE_WEBHOOK", "false").lower()
         tg_use_webhook = tg_enabled_str in ("true", "1", "yes")
         tg_bot_token = os.getenv("TG_BOT_TOKEN", "")
         telegram_config = TelegramConfig(
-            enabled=bool(tg_bot_token),
+            enabled=tg_enabled and bool(tg_bot_token),
             bot_token=tg_bot_token,
             allowed_user_ids=allowed_user_ids,
             use_proxy=os.getenv("TG_USE_PROXY", "false").lower() == "true",
@@ -144,6 +175,26 @@ class Config:
             webhook_host=os.getenv("TG_WEBHOOK_HOST", "0.0.0.0"),
             webhook_port=int(os.getenv("TG_WEBHOOK_PORT", "8443")),
             webhook_secret=os.getenv("TG_WEBHOOK_SECRET", ""),
+        )
+
+        # Wiki 配置
+        wiki_enabled_str = os.getenv("WIKI_ENABLED", "false").lower()
+        wiki_enabled = wiki_enabled_str in ("true", "1", "yes")
+        wiki_config = WikiConfig(
+            enabled=wiki_enabled,
+            vault_path=os.getenv("OBSIDIAN_VAULT_PATH", ""),
+            archive_strategy=os.getenv("WIKI_ARCHIVE_STRATEGY", "daily"),
+            llm_api_key=os.getenv("WIKI_LLM_API_KEY", os.getenv("AI_API_KEY", "")),
+            llm_model=os.getenv("WIKI_LLM_MODEL") or os.getenv("AI_MODEL", "qwen-turbo"),
+            llm_base_url=os.getenv("WIKI_LLM_BASE_URL") or os.getenv("AI_BASE_URL"),
+            llm_temperature=float(os.getenv("WIKI_LLM_TEMPERATURE", "0.7")),
+            llm_max_tokens=int(os.getenv("WIKI_LLM_MAX_TOKENS", "2000")),
+            llm_retry_times=int(os.getenv("WIKI_LLM_RETRY_TIMES", "3")),
+            auto_process=os.getenv("WIKI_AUTO_PROCESS", "true").lower() in ("true", "1", "yes"),
+            auto_import_wiki=os.getenv("WIKI_AUTO_IMPORT_WIKI", "false").lower() in ("true", "1", "yes"),
+            file_monitor_enabled=os.getenv("WIKI_FILE_MONITOR_ENABLED", "true").lower() in ("true", "1", "yes"),
+            file_monitor_interval=int(os.getenv("WIKI_FILE_MONITOR_INTERVAL", "5")),
+            health_check_interval=int(os.getenv("WIKI_HEALTH_CHECK_INTERVAL", "7")),
         )
 
         return cls(
@@ -163,6 +214,7 @@ class Config:
             log_dir=os.getenv("LOG_DIR", "storage/logs"),
             feishu=feishu_config,
             telegram=telegram_config,
+            wiki=wiki_config,
         )
 
     def validate(self) -> tuple[bool, str]:
