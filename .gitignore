@@ -32,7 +32,6 @@ uv.lock
 mydoc/
 CLAUDE.md
 
-
 # PyInstaller
 #  Usually these files are written by a python script from a template
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.
@@ -127,7 +126,6 @@ celerybeat.pid
 *.sage.py
 
 # 环境变量文件
-.env
 .env.local
 .env.*.local
 
@@ -167,7 +165,6 @@ cython_debug/
 .DS_Store
 .obsidian
 .pytest_cache
-.venv
 
 # 项目特定
 storage/temp_files/
