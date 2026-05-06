@@ -29,6 +29,8 @@ MANIFEST
 .venv
 .python-version
 uv.lock
+mydoc/
+CLAUDE.md
 
 
 # PyInstaller
