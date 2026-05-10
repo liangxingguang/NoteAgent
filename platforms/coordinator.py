@@ -38,14 +38,22 @@ class MessageCoordinator:
     消息协调器 - 处理来自不同平台的统一消息
     """
 
-    def __init__(self, platform_manager: PlatformManager):
+    def __init__(self, platform_manager: PlatformManager, max_concurrent: int = 5):
         self.platform_manager = platform_manager
         self.wiki_command_handler = WikiCommandHandler()
+        self._semaphore = asyncio.Semaphore(max_concurrent)
+
+    def _handle_message(self, msg: UnifiedMessage):
+        """消息处理入口，供 PlatformManager 调用（非阻塞）"""
+        asyncio.create_task(self._process_with_limit(msg))
+
+    async def _process_with_limit(self, msg: UnifiedMessage):
+        """带并发限制的消息处理"""
+        async with self._semaphore:
+            await self.process_message(msg)
 
     async def process_message(self, msg: UnifiedMessage):
-        """
-        处理统一消息
-        """
+        """处理统一消息"""
         logger.info(f"收到来自 {msg.platform.value} 的消息: user={msg.user_id}, type={msg.content_type.value}")
 
         try:

@@ -182,8 +182,8 @@ class NoteAgentsApp:
         # 创建消息协调器
         self.coordinator = MessageCoordinator(self.platform_manager)
 
-        # 注册消息处理回调
-        self.platform_manager.add_message_handler(self._handle_message)
+        # 注册消息处理回调（直接使用 coordinator 的处理入口）
+        self.platform_manager.add_message_handler(self.coordinator._handle_message)
 
         # 获取已启用平台
         enabled_platforms = self.platform_manager.get_enabled_platforms()
@@ -191,11 +191,6 @@ class NoteAgentsApp:
             raise RuntimeError("没有启用任何平台，请检查配置")
 
         logger.info(build_platform_start_message(enabled_platforms))
-
-    def _handle_message(self, msg: UnifiedMessage):
-        """处理收到的统一消息"""
-        # 在后台任务中处理消息
-        asyncio.create_task(self.coordinator.process_message(msg))
 
     async def run(self):
         """运行应用"""

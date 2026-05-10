@@ -1,6 +1,4 @@
 """网页内容抓取工具（生产稳定版，专为AI总结设计）"""
-import re
-import uuid
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
@@ -9,7 +7,6 @@ import trafilatura
 from bs4 import BeautifulSoup
 
 from storage.log_manager import get_logger
-from storage.temp_manager import get_temp_manager
 
 logger = get_logger("WebTool")
 
